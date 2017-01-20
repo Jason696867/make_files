@@ -32,7 +32,7 @@ configuration settings from Virtualbox as well as the guest VM itself.
 1. First, make sure that the guest VM has been shut down.
 
 2. Next, from Virtualbox pull-down menu option and in the ‘Settings’ we need
-   to make changes to the ‘Network’ for the Restripe guest VM.
+   to make changes to the ‘Network’ for the guest VM.
 
 3. For tab labled ‘Adapter 1’ select for ‘Attached to’ field ‘Bridged Adapter’.
    For the ‘Name’ field select a real NIC device other than the NIC connected to RJ54
