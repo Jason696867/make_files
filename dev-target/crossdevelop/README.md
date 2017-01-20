@@ -1,6 +1,6 @@
-# Redstripe Cross Environment Setup
+# Project Cross Environment Setup
 
-The following steps are required to work with a console:
+The following steps are required to work with a target:
 
 1. Configure the VirtualBox VM
 
@@ -8,18 +8,18 @@ The following steps are required to work with a console:
 
 3. Prepare a bootable SD card and/or USB stick
 
-4. Configure the console
+4. Configure the target
 
 5. Enable booting from NAND
 
 These are one-time activities, until there are changes to
 the development toolchain,
-the root filesystem of the console,
+the root filesystem of the target,
 or the bootable SD card.
 See the last section "Updates" in this document to update
 an already installed cross-development environment.
 
-After that you can power and use the console with the root filesystem
+After that you can power and use the target with the root filesystem
 hosted by your Ubuntu VM, or with the rootfs on the SD card, or with
 the rootfs in a NAND partition.
 
@@ -49,12 +49,12 @@ configuration settings from Virtualbox as well as the guest VM itself.
 
 ## Configure Ubuntu
 
-There are two make targets to configure Ubuntu for redstripe project activity.
+There are two make targets to configure Ubuntu for project activity.
 
 The first target installs and configures the required applications and tools
-for NFS mounting and serial connections to the console.
+for NFS mounting and serial connections to the target.
 
-        make cross-console
+	make cross-target
 
 The second target also installs the cross-development toolchain.
 To configure Ubuntu for cross development run
@@ -73,9 +73,9 @@ into the computer
 
 Run --as root-- the interactive script to deploy the system to your card:
 
-        sudo ./prepare_redstripe_device
+	sudo ./prepare_Project_device
 
-You will be asked to select the device to build, and the console type (E, LDV, or X)
+You will be asked to select the device to build, and the target type (E, LDV, or X)
 with which the boot device will be used. This takes about three minutes once you've
 answered the initial questions.
 
@@ -83,9 +83,9 @@ Be careful with this command, since it will attempt to partition and format
 whatever device you specify.
 
 
-## Configure the Console
+## Configure the target
 
-1. Connect the Ethernet cable between the console and the USB-Ethernet adapter plugged
+1. Connect the Ethernet cable between the target and the USB-Ethernet adapter plugged
    into the computer, which is specified as 'Adaptor 2' in the VM Configuration.
 
 2. The two pins next to the comm port need to be connected, by e.g. jumper.
@@ -96,21 +96,21 @@ whatever device you specify.
    The digital board is the bottom board.
    You'll want to use thin fingers or remove the top boards for access.
 
-3. Connect the FTDI UART cable to the console and the computer.
+3. Connect the FTDI UART cable to the target and the computer.
    This is the comm port, i.e. plug into the comm port pins on the bottom board.
    The arrow on the connector goes in the pin next to the jumped pins.
 
 4. Capture the FTDI USB device in the VM via the VirtualBox Devices-&gt;USB menu.
 
 
-### Power the Console
+### Power the target
 
-1. Power on the console.
+1. Power on the target.
 
-2. By default the console will launch the redstripe application.
+2. By default the target will launch the Project application.
 
 3. To observe the boot sequence, one can optionally start minicom in Ubuntu with
-   the following command: `sudo minicom redstripe`
+   the following command: `sudo minicom Project`
    A short while after power-on, the minicom terminal will ask for a login.
 
 4. If you're a developer, you can ssh as root and login with password 'root'.
@@ -141,23 +141,23 @@ If you have already performed the above steps and simply want to update the
 cross-development environment:
 
 1. Update the uImage on the SD card, if needs be. You can either remove
-   the SD card from the console and mount it on your computer, to then
+   the SD card from the target and mount it on your computer, to then
    deploy files as described in the above section "Prepare a boot device";
    or use the NFS-mounted rootfs to copy the latest uImage and install it
-   via a shell session on the console:
+   via a shell session on the target:
 
         cp crossdevelop/images/uImage rootfs-assets/root/uImage-new
         make deploy-target-apps
 
-        (power on the console)
-        (ssh to the console)
+	(power on the target)
+	(ssh to the target)
         sdcard=/mnt/sdcard
         mkdir -p $sdcard
         mount /dev/mmcblk0p2 $sdcard
         cp uImage-new $sdcard/boot/uImage
         umount $sdcard
         rmdir $sdcard
-        (power off the console)
+	(power off the target)
 
 2. Update the toolchain and rootfs:
 
