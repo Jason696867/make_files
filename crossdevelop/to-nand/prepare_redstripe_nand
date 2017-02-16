@@ -1,0 +1,105 @@
+#!/bin/sh
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  crossdevelop/to-nand/prepare_redstripe_nand
+#
+# @brief  Builds the NAND of the console so it can
+#         boot standalone, with the redstripe apps.
+#
+
+echo "Erasing NAND u-boot partition.."
+flash_erase /dev/mtd1 0 0
+flash_erase /dev/mtd2 0 0
+
+echo "Installing u-boot into NAND partition.."
+nandwrite -p /dev/mtd1 u-boot.bin
+sync;sync;sync
+
+echo "Erasing NAND Linux kernel partition.."
+flash_erase /dev/mtd3 0 0
+
+echo "Installing Linux kernel image into NAND partition.."
+nandwrite -p /dev/mtd3 uImage
+sync;sync;sync
+
+for device in 4 5; do
+	echo "Erasing NAND root filesystem partition ${device}..."
+	flash_erase "/dev/mtd$device" 0 0
+
+	echo "Formatting, imaging and verifying root filessystem partition ${device} -> UBIFS.."
+	echo "This will take a while"
+	ubiformat "/dev/mtd$device" -f rfs200-rootfs.ubifs.img
+	sync;sync;sync
+done
+
+echo "Attach to UBIFS based partition BANK A just populated"
+ubiattach /dev/ubi_ctrl -m 4
+sync;sync;sync
+
+echo "Mounting NAND UBIFS BANK A filesystem to current root filesystem"
+mkdir -p /media/nand1
+mount -t ubifs /dev/ubi0_4 /media/nand1
+
+echo "Attach to UBIFS based partition BANK B just populated"
+ubiattach /dev/ubi_ctrl -m 5
+sync;sync;sync
+
+echo "Mounting NAND UBIFS filesystem to current root filesystem"
+mkdir -p /media/nand2
+mount -t ubifs /dev/ubi1_4 /media/nand2
+
+
+echo "Formatting, imaging and verifying persistent data partition.. "
+ubiformat /dev/mtd6 -f persistent-data.ubifs.img
+
+echo "Attach to UBIFS based persistent data partition"
+ubiattach /dev/ubi_ctrl -m 6
+sync;sync;sync
+
+echo "Mounting NAND UBIFS filesystem to persistent data"
+mkdir -p /media/data
+mount -t ubifs /dev/ubi2_5 /media/data
+
+echo "Installing overlay..."
+# Uses the SD card as the source of overlay files.
+for bank in nand1 nand2; do
+	# Copies the Red Stripe apps
+	cp -r "/opt/redstripe" "/media/$bank/opt/"
+
+	# Copies the overlay components
+	cp -rf overlay/* "/media/$bank/"
+
+	# Sets up ssh keys and configuration for developers.
+	# Simply copies the device configuration to the NAND partition.
+	cp "/etc/ssh/sshd_config" "/media/$bank/etc/ssh/sshd_config"
+	if [[ -d "/root/.ssh" ]]; then
+		cp -r "/root/.ssh" "/media/$bank/root/"
+	fi
+done
+
+echo "Installing persistent data overlay..."
+target_persistent_data=/media/data
+cp -rf persistent-data/* $target_persistent_data
+
+# Prompt to set the console serial number
+echo "Configuration..."
+echo -n "Enter Console SN and press [ENTER]: "
+read sn
+
+sed -i -e "/sn/ s/.*/sn=$sn/" $target_persistent_data/console.conf
+
+
+echo "Unmounting NAND..."
+for partition in nand1 nand2 data; do
+	umount "/media/$partition"
+	rmdir "/media/$partition"
+done
+sync;sync;sync
+
+echo "Detaching from NAND..."
+for device in 4 5 6; do
+	ubidetach /dev/ubi_ctrl -m $device
+done

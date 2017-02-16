@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  crossdevelop/prepare_redstripe_device
+#
+# @brief  Builds an SD card or USB stick that can be used
+#         to boot a console with the redstripe apps,
+#         and in turn build the NAND of that console.
+#
+
+# Checks for the existence of the Red Stripe app.
+redstripe="/opt/rfs200-rootfs/opt/redstripe/build/target-apps"
+if [[ ! -f "$redstripe/bin/applauncher" ]]; then
+	echo "The target apps must be built first."
+	echo "    make clean-deploy-target-apps"
+	echo "    make deploy-target-apps"
+	exit 1
+fi
+
+# Checks that we are running as root.
+if [[ $(id -u) -ne 0 ]]; then
+	echo "Must run $(basename "$0") as root"
+	exit 1
+fi
+
+dir=$(cd "$(dirname "$0")" && pwd)
+cd "$dir"
+
+available_mounts=$(cut -d" " -f1,2 --output-delimiter=">" /proc/mounts |grep "/dev/sd" |grep -v "sda")
+if [[ -z "${available_mounts}" ]]; then
+	echo "No suitable device found (must be mounted to be listed here)"
+	exit 1
+fi
+
+echo
+PS3="Select device for deployment (all existing data will be lost): "
+select mount_point in ${available_mounts} "Quit"; do
+	if [[ "$mount_point" = "Quit" ]]; then
+		exit 1
+	else
+		selected="$mount_point"
+		target_device=$(echo "$mount_point" | cut -d">" -f1 | rev | cut -c 2- | rev)
+		break
+	fi
+done
+
+if [[ $(echo "$selected" |cut -c 1-5) != "/dev/" ]]; then
+	echo "No selected device"
+	exit 1
+fi
+
+echo
+PS3="Type of device ${target_device}: "
+select dtype in "SD" "USB"; do
+	case $dtype in
+		"SD")
+			device_type="sd"; break;;
+		"USB")
+			device_type="usb"; break;;
+	esac
+done
+
+if [[ "${device_type}" = "sd" ]]; then
+	echo
+	PS3='How will the SD card be used: '
+	select sdusage in "development (NFS)" "factory (standalone)"; do
+		case $sdusage in
+			"development (NFS)" ) sd_uenv="develop"; break;;
+			"factory (standalone)" ) sd_uenv="factory"; break;;
+		esac
+	done
+fi
+
+echo
+# Requires that the user select the console type, to set the model number.
+PS3='Select the type of console in which the device will be used: '
+options=("E: 200E" "L: 200LD-V" "X: 200X")
+select option in "${options[@]}"; do
+	case $option in
+		"E: 200E")
+			model="200E"; break;;
+		"L: 200LD-V")
+			model="200LD-V"; break;;
+		"X: 200X")
+			model="200X"; break;;
+	esac
+
+	case "$REPLY" in
+		e|E)
+			model="200E"; break;;
+		l|L)
+			model="200LD-V"; break;;
+		x|X)
+			model="200X"; break;;
+	esac
+done
+
+
+if [[ "$device_type" = "usb" ]]; then
+	. include/partition_usb.sh
+	. include/format_usb.sh
+
+	filesystem_mount_point="USB_ROOT"
+
+	echo "Remounting..."
+	mkdir -p /media/${filesystem_mount_point}
+	mount ${target_device}1 /media/${filesystem_mount_point}
+
+	echo "Mounted"
+	mounted=( "${filesystem_mount_point}" )
+elif [[ "$device_type" = "sd" ]]; then
+	. include/partition_sd_card.sh
+	. include/format_sd_card.sh
+
+	filesystem_mount_point="RFS_ROOT"
+
+	echo "Remounting..."
+	mkdir -p /media/RFS_BOOT
+	mount ${target_device}1 /media/RFS_BOOT
+	mkdir -p /media/${filesystem_mount_point}
+	mount ${target_device}2 /media/${filesystem_mount_point}
+
+	sleep 2
+	echo "Mounted"
+	mounted=( "RFS_BOOT" "${filesystem_mount_point}" )
+
+	. include/load_sd_card_boot.sh
+fi
+
+. include/load_common_boot.sh
+. include/load_nand_install_files.sh
+
+for m in "${mounted[@]}"; do
+	echo "Unmounting $m"
+	umount "/media/$m"
+	rmdir "/media/$m"
+done
+
+echo "Finished!"
