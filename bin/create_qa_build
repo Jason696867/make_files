@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/create_qa_build
+#
+# Create a new QA Build (IB series, then TC).
+# Prerequisite: bump the version number.
+#
+# Merges the QA Build release branch to both
+# master and develop.
+
+rootdir=$(git rev-parse --show-toplevel)
+cd "$rootdir"
+
+# Names the branch with the current version number
+# <prefix>-<major>.<minor>.<revision>
+prefix="TC"
+dir="deliverables"
+versionfile="$dir/version.txt"
+version=$(cat "$versionfile")
+build="$prefix-$version"
+branch="feature-$build"
+
+# Only uses develop as the base for QA Builds.
+base="develop"
+master="master"
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$branch" != "$base" ]]; then
+	echo "Current branch is '$branch'"
+	echo "Switch to '$base' prior to creating the QA Build."
+	exit 1
+fi
+
+# Pulls the latest from master and develop
+git fetch
+git checkout "$master"
+git pull
+git checkout "$base"
+git pull
+
+# Verifies that the version does not already exist.
+tarball="$dir/$build.tar"
+if [[ -f "$tarball" ]]; then
+	echo "File '$tarball' already exists."
+	echo "Bump version prior to creating the QA Build."
+	exit 1
+fi
+
+git add "$versionfile"
+git commit -m "Bump version for $build"
+git push
+
+git flow release start "$build" "$base"
+if [[ $? -ne 0 ]]; then
+  echo "Cannot start the release branch."
+  exit 1
+fi
+
+git flow release publish "$build"
+
+bin/prepare_qa_build_deliverables
+if [[ $? -ne 0 ]]; then
+  echo "Failed to prepare the deliverables."
+  git checkout "$base"
+  git branch --delete "$branch"
+  git push origin --delete "$branch"
+  exit 1
+fi
+
+# Do not tolerate any git command errors.
+set -e
+
+git add "$dir"
+git commit -m "Deliverables for $build"
+git push
+
+# Merges into master and develop.
+git flow release finish --message "QA Build $prefix-$version" "$build"
+
+# Pushes the key branch updates and the new tag.
+git checkout "$master"
+git push
+git checkout "$base"
+git push
+git push origin "$build"

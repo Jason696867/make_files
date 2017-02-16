@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/encrypt_update_tarball
+#
+# Expects the keyring files under either GNUPGHOME or ~/.gnupg
+set -e
+
+if [[ $# -ne 2 ]]; then
+	echo "Usage: $(basename "$0") SRC DEST"
+	exit 2
+fi
+
+src="$1"
+if [[ ! -f "$src" ]]; then
+	echo "Source file not found"
+	exit 1
+fi
+
+dest="$2"  # convention: a .gpg file
+
+gpg --verbose --no-greeting --no-options \
+	--batch --yes \
+	--trust-model always \
+	--compress-algo none \
+	--no-default-keyring --keyring serverPub.gpg \
+	--recipient Tarball \
+	--encrypt --output "$dest" \
+	"$src"

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/project_flexelint
+#
+# Run the FlexeLint static analysis tool on the entire
+# project source code.
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $(basename "$0") APPS..."
+  exit 1
+fi
+
+for app in "$@"; do
+  if [[ ! -d "$app" ]]; then
+    echo "'$app' not found"
+    exit 2
+  fi
+
+  bin/run_flexelint -xunitxml "$app"
+done

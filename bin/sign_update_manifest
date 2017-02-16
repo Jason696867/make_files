@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/sign_update_manifest
+#
+# Expects the keyring files under either GNUPGHOME or ~/.gnupg
+#
+# Expects the manifest passphrase in MANIFEST_PASS_FILE (first line)
+set -e
+
+if [[ $# -ne 2 ]]; then
+	echo "Usage: $(basename "$0") SRC SIGNATURE_DEST"
+	exit 2
+fi
+
+src="$1"
+if [[ ! -f "$src" ]]; then
+	echo "Source file not found"
+	exit 1
+fi
+
+dest="$2"  # convention: a .sig file
+
+if [[ ! -f "$MANIFEST_PASS_FILE" ]]; then
+	echo "Missing manifest passphrase file"
+	exit 1
+fi
+
+cat "${MANIFEST_PASS_FILE}" \
+| gpg --verbose --no-greeting --no-options \
+	--batch --yes \
+	--trust-model always \
+	--passphrase-fd 0 \
+	--no-default-keyring --keyring serverPub.gpg --secret-keyring serverSec.gpg \
+	--local-user Manifest \
+	--detach-sign --output "$dest" \
+	"$src"

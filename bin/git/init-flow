@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/git/init-flow
+#
+# Set up the git repository to use git flow subcommands.
+
+DIR=$(git rev-parse --show-toplevel)
+cd "$DIR"
+
+if [[ ! $(git branch |grep master) ]]; then
+  echo "master branch is missing"
+  echo "suggestion: git fetch && git checkout master"
+  exit 1
+fi
+
+git flow init -d
+
+# We want to use dash as the separator, not forward slash because
+# it would look too much like a path separator.
+git flow config set feature "feature-" >/dev/null
+git flow config set release "release-" >/dev/null
+git flow config set hotfix "hotfix-" >/dev/null
+git flow config set support "support-" >/dev/null
+
+git flow config

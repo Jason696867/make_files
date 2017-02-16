@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/run_doxygen
+#
+# Run doxygen and exit with appropriate status code if errors were found.
+#
+# Silences regular processing output.
+# Outputs error on stderr.
+
+checker=doxygen
+config=".config/doxygen/doxygen.cfg"
+
+if ! command -v "$checker" >/dev/null ; then
+  echo "[ERROR] ${checker}: command not found"
+  exit 1
+fi
+
+# Runs at the root of the repository.
+DIR=$(cd "$(dirname "$0")" && pwd)
+cd "$DIR/.."
+
+prefix="run-doxygen"
+suffix=$(date +%Y%m%dT%H%M%S)
+errors="/tmp/$prefix-$suffix.errs"
+
+# Removes current directory path prefix on each error line.
+p=$((1 + $(pwd -P |wc -c)))
+
+(doxygen "$config" >/dev/null) 2>&1 |cut -c $p- >"$errors"
+
+if [[ -s "$errors" ]]; then
+  outcome=1
+  # Command-line arguments are the changeset, if any.
+  if [[ $# -eq 0 ]]; then
+    cat "$errors" >&2
+  else
+    # Filters the list of errors by the filenames in the changeset.
+    touch "${errors}.filtered"
+    for f in "$@"; do
+      grep "^$f:" "$errors" >>"${errors}.filtered"
+    done
+
+    if [[ -s "${errors}.filtered" ]]; then
+      cat "${errors}.filtered" >&2
+    else
+      # No errors after filtering for changeset.
+      outcome=0
+    fi
+  fi
+else
+  outcome=0
+fi
+
+rm -f "$errors" "${errors}.filtered"
+exit $outcome

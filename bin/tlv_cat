@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/tlv_cat
+#
+# Generate a TLV byte stream on stdout from a given tag and file.
+
+import os.path
+import shutil
+import struct
+import sys
+
+
+def main(args):
+    """
+    The tag character is the first argument, followed by the source file.
+    """
+
+    if len(args) != 3:
+        sys.exit('Usage: {script} TAG FILE')
+
+    tag = args[1].encode()
+
+    if len(tag) != 1:
+        sys.exit('Tag must be a single character')
+
+    filename = args[2]
+
+    if not os.path.isfile(filename):
+        sys.exit('File not found')
+
+    # Tag
+    sys.stdout.buffer.write(struct.pack('s', tag))
+
+    # Length
+    length = os.path.getsize(filename)
+    sys.stdout.buffer.write(struct.pack('i', length))
+
+    # Value
+    with open(filename, 'rb') as f:
+        shutil.copyfileobj(f, sys.stdout.buffer)
+
+if __name__ == '__main__':
+    main(sys.argv)

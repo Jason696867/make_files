@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/git/hooks/pre-commit/pre-commit-whitespace
+#
+# Reject whitespace error.
+set -e
+
+if git rev-parse --verify HEAD >/dev/null 2>&1 ; then
+  against=HEAD
+else
+  # Initial commit: diff against an empty tree object
+  against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+fi
+
+#exec 1>&2
+#exec git diff-index --check --cached $against --

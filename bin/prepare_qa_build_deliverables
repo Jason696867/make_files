@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/prepare_qa_build_deliverables
+#
+# Assembles the files required for the deliverables of the QA Build.
+set -e
+
+# Names the deliverable with the current version number
+# <prefix>-<major>.<minor>.<revision>.tar
+dir="deliverables"
+prefix="TC"
+versionfile="$dir/version.txt"
+deliverable="$prefix-$(cat "$versionfile")"
+tarball="$dir/$deliverable.tar"
+
+if [[ -f "$tarball" ]]; then
+	echo "Not overwriting existing $tarball"
+	echo "Did you intend to bump the version number?"
+	exit 1
+else
+	echo "Preparing $tarball"
+fi
+
+# Deletes previous build files, if any.
+make --silent clean-docs clean-apps
+
+# Re-installs a clean toolchain and console root filesystem.
+make --silent --directory crossdevelop update-toolchain
+make --silent --directory crossdevelop update-rootfs
+
+# Builds the target apps and deploys them to the console root filesystem.
+make --silent --jobs=6 target-apps
+make --silent deploy-target-apps
+
+# Builds the VM apps.
+make --silent --jobs=6 vm-apps
+
+# Builds the documentation.
+make --silent docs
+
+# Gathers the deliverables.
+tempo=$(mktemp --directory)
+destination="$tempo/$deliverable"
+mkdir -p "$destination"
+
+rootfs_tarball="rfs200-rootfs-$(date +'%Y%m%d').tar.bz2"
+mkdir -p "$destination/archives"
+sudo tar --create --bzip2 --directory /opt --file "$destination/archives/${rootfs_tarball}" rfs200-rootfs
+
+cp -p crossdevelop/Makefile "$destination/"
+cp -Rp crossdevelop/config "$destination/"
+
+mkdir -p "$destination/vm-apps"
+cp -Rp build/vm-apps/assets "$destination/vm-apps/"
+cp -Rp build/vm-apps/bin "$destination/vm-apps/"
+
+cp -Rp docs "$destination/"
+
+cp -p deliverables/README.md "$destination/"
+cp -p deliverables/TESTING.md "$destination/"
+cp -p crossdevelop/README.md "$destination/CONSOLE.md"
+
+# Creates the tarball.
+tar --create --directory "$tempo" --file "$tarball" "$deliverable"
+
+rm -rf "$tempo"

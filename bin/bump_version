@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/bump_version
+#
+# Increases the version number for build deliverables.
+#
+# Expects one parameter:
+# - semantic versioning level (major, minor, and revision)
+#
+# Note: A version increase at a given level resets the lower
+# levels to zero.
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $(basename "$0") [major|minor|revision]"
+  exit 2
+fi
+
+level="$1"
+
+# Reads the current version number.
+# Starts at zero if none.
+versionfile="deliverables/version.txt"
+dir=$(dirname "$versionfile")
+if [[ ! -d "$dir" ]]; then
+  echo "Cannot find directory: $dir"
+  exit 1
+fi
+if [[ -f "$versionfile" ]]; then
+  version=$(cat "$versionfile")
+else
+  version="0.0.0"
+fi
+
+# Extracts the threee semantic version levels.
+major=${version%%.*}
+minor=${version#*.}
+minor=${minor%.*}
+revision=${version##*.}
+
+echo "Current version: $major.$minor.$revision"
+
+# Increases the version level, if it is valid.
+if [[ $level == "major" ]]; then
+  ((major++))
+  minor=0
+  revision=0
+elif [[ $level == "minor" ]]; then
+  ((minor++))
+  revision=0
+elif [[ $level == "revision" ]]; then
+  ((revision++))
+else
+  echo "Unknown level: $level"
+  exit 2
+fi
+
+# Saves the new version number.
+set -e
+version="$major.$minor.$revision"
+echo "$version" >"$versionfile"
+echo "New version: $version"

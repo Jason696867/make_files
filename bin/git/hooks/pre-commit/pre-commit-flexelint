@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/git/hooks/pre-commit/pre-commit-flexelint
+#
+# git pre-commit hook to apply FlexeLint source code analysis.
+#
+# Aborts commit when any file changes do not comply with the
+# lint settings.
+#
+# References
+# - FlexeLint: http://www.gimpel.com/html/flex.htm
+
+checker="bin/flexelint"
+version="FlexeLint for C/C++ (Unix) Vers. 9.00L, Copyright Gimpel Software 1985-2014"
+wrapped_checker="bin/run_flexelint"
+
+# Only runs if the changes include C/C++ files.
+pattern='\.(c|cpp|cc|cxx|h|hpp)$'
+
+
+# Necessary check for initial commit.
+if git rev-parse --verify HEAD >/dev/null 2>&1 ; then
+  against=HEAD
+else
+  # Initial commit: diff against an empty tree object
+  against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+fi
+
+
+if ! command -v "$checker" > /dev/null ; then
+  echo "[ERROR] $checker: command not found"
+  exit 1
+fi
+
+reported_version=$($checker +b)
+if [[ "${reported_version}" != "$version" ]]; then
+  echo "[ERROR] $checker: requires version $version -- found ${reported_version}"
+  echo "Please uninstall $(which $checker)"
+  exit 1
+fi
+
+
+# Check changes in each file, individually.
+outcome=0
+git diff --cached --name-only --diff-filter=ACM $against -- \
+|grep -E $pattern \
+|while read file
+do
+    "$wrapped_checker" "$file"
+    outcome=$(($? + $outcome))
+done
+
+exit $outcome

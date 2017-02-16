@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/git/init-hooks
+#
+# Set up the git repository to use git hooks under version control.
+# Each hook can have multiple checks under bin/git/hooks/HOOKNAME/
+#
+# Developers can also keep a custom hook in .git/hooks/HOOKNAME.local
+
+HOOKS="applypatch-msg pre-applypatch post-applypatch pre-commit prepare-commit-msg commit-msg post-commit pre-rebase post-checkout post-merge pre-receive update post-receive post-update pre-auto-gc pre-push"
+
+HOOK_DIR=$(git rev-parse --show-toplevel)/.git/hooks
+
+WRAPPER="hooks-wrapper"
+
+for hook in $HOOKS; do
+  # Preserves an existing, local hook if it already exists, is a file, and is not a symlink.
+  if [ ! -h "${HOOK_DIR}/$hook" -a -f "${HOOK_DIR}/$hook" ]; then
+    mv "${HOOK_DIR}/$hook" "${HOOK_DIR}/$hook.local"
+  fi
+
+  # Creates a symlink to the wrapper script.
+  ln --symbolic --force "../../bin/git/$WRAPPER" "${HOOK_DIR}/$hook"
+done

@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/generate_unlock_manifest.py
+#
+# Generate the JSON manifest for the console unlock image, on stdout.
+
+
+import datetime
+import hashlib
+import json
+import os.path
+import sys
+
+
+NOW = datetime.datetime.utcnow().isoformat()
+
+CLEAR_MESSAGE = 'Please unlock this console.'
+
+
+def main(args):
+    """
+    The message in the clear is checked pro-forma.
+
+    """
+
+    manifest = {
+        'DateTime': NOW,
+	'PackageName': CLEAR_MESSAGE,
+    }
+
+    print(json.dumps(manifest, indent=2, separators=(',', ': ')))
+
+
+if __name__ == '__main__':
+        main(sys.argv)

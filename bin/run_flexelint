@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/run_flexelint
+#
+# Run the FlexeLint static analysis tool on the given source
+# file or a directory of source files.
+
+xml=0
+
+if [[ $# -eq 2 ]]; then
+  if [[ "$1" == "-xunitxml" ]]; then
+    xml=1
+    shift
+  fi
+fi
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $(basename "$0") [-xunitxml] SOURCE"
+  exit 2
+fi
+
+# Finds my location.
+dir=$(cd "$(dirname "$0")" && pwd)
+
+
+# Distinguishes directory vs file target.
+target="$1"
+if [[ -d "$target" ]]; then
+  operand="directory"
+  options=""
+elif [[ -f "$target" ]]; then
+  operand="file"
+  filename="$target"
+
+  # Don't check C code in a single file.
+  if [[ "$filename" == *.c ]]; then
+    exit 0
+  fi
+
+  target=$(dirname "$target")
+  options="-u"
+else
+  echo "'$target' not found"
+  exit 1
+fi
+
+# Replaces potential "." with actual app directory name.
+target=$(basename $(cd "$target" && pwd))
+
+# Adjust the output if XML is required.
+xml_lnt=""
+if [[ $xml -eq 1 ]]; then
+  xml_lnt="junit-xml.lnt"
+fi
+
+
+# Operates out of the repository root.
+root_dir=$(git rev-parse --show-toplevel)
+cd "$root_dir"
+
+work="build/analyze/$target"
+if [[ -d "$work" ]]; then
+  rm -rf "$work"
+fi
+mkdir -p "$work"
+
+
+# Extracts the include paths and the list of source *.cpp files to lint.
+
+pushd "$work" >/dev/null
+
+pro="../../../$target/$target.pro"
+if [[ ! -f "$pro" ]]; then
+  # The file is not part of an app (e.g. under common/) or it's a unit test.
+  # @todo: lint just that file, with the necessary (hard-coded?) include_paths as context.
+  # For now, don't examine the file.
+  exit 0
+fi
+
+# @todo: if FOR_TARGET is used, lint twice -- with and without it.
+qmake_options="FOR_TARGET=1 DEFINES+=TARGET"
+qmake $qmake_options "$pro"
+
+# Compile the .ui files, if any. Silently.
+make compiler_uic_make_all &>/dev/null
+
+grep '^INCPATH' Makefile \
+  |perl -pe 's/.* = //; s/-I/-i/g; s/-isystem /-i/g; s#(\.\.\/){3}##g; s/\s+/\n/g' \
+  |sort -u \
+  >include_paths.lnt
+
+source_list="source_list.lnt"
+if [[ "$operand" == "file" ]]; then
+  echo "../../../$filename" >$source_list
+else
+  perl -pe 's/ \\\n/ /' Makefile \
+  |grep '^SOURCES' \
+  |perl -pe 's/.* = //; s/\s+/\n/g' \
+  |grep -v '^moc_' \
+  >$source_list
+fi
+
+popd >/dev/null
+
+
+# Runs lint and saves the report.
+
+report="$work/flexelint-report.txt"
+xml_report="$work/$target-report.xml"
+lint_version=$(bin/flexelint -v 2>&1)
+
+"$dir/flexelint" $options \
+  -i.config/flexelint \
+  co-gcc.lnt ${operand}.lnt ${xml_lnt} \
+  -i"$work" \
+  include_paths.lnt \
+  "$source_list" \
+  >"$report"
+
+outcome=$?
+
+if [[ $outcome -ne 0 ]]; then
+  echo "Number of issues with '$target': $outcome"
+
+  # Clean up filepaths
+  perl -pe 's#((\w+/){3}(\.\./){3})##g' -i "$report"
+
+  # XML, or plain text
+  if [[ $xml -eq 1 ]]; then
+    # Inserts and uniquely names each testcase.
+    cat >"${xml_report}" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite errors="0" skipped="0" failures="${outcome}" name="linting ${target}" tests="${outcome}">
+  <properties>
+    <property value="${lint_version}" name="FlexeLintVersion"/>
+  </properties>
+
+$(grep '^<testcase ' "$report" |sort |uniq |perl -pe '++$a; $aa = sprintf "%03d", $a;  s/(name=")(-line-0-)?/$1$aa-/')
+</testsuite>
+
+EOF
+    # The test outcome is reported, the execution is not a failure.
+    outcome=0
+  else
+    cat "$report"
+  fi
+else
+  # XML, or silence
+  if [[ $xml -eq 1 ]]; then
+    cat >"${xml_report}" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite errors="0" skipped="0" failures="0" name="linting ${target}" tests="1">
+  <properties>
+    <property value="${lint_version}" name="FlexeLintVersion"/>
+  </properties>
+
+  <testcase result="pass" name="${target}"/>
+</testsuite>
+
+EOF
+  fi
+fi
+rm "$report"
+
+exit $outcome

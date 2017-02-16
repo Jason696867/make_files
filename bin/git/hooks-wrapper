@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# Medtronic MITG R&D
+# 5920 Longbow Drive, Boulder, CO
+# Copyright (c) 2016 Medtronic
+# All Rights Reserved.
+#
+# @file  bin/git/hooks-wrapper
+#
+# Run all executables for the wrapped hook name.
+#
+# Propagates exit code if any of the executions failed.
+# Note: we don't bail at the first failure, so all issues
+# are reported to the user.
+
+HOOKNAME=$(basename $0)
+HOOK_DIR=$(git rev-parse --show-toplevel)/bin/git/hooks
+
+
+# Run a hook, if executable.
+# Arguments:
+#   path to hook executable
+# Returns:
+#   the exit code
+#   zero if there is no executable at the given path
+execute_hook ()
+{
+  hook="$1"
+  [[ -x "$hook" ]] || return 0
+
+  out=$("$hook")
+  outcome=$?
+
+  [[ -z "$out" ]] || echo "$out"
+
+  return $outcome
+}
+
+
+# Runs all executables dedicated to this hook.
+exitcodes=()
+for hook in $HOOK_DIR/$HOOKNAME/* $HOOKNAME.local; do
+  execute_hook "$hook"
+  exitcodes+=($?)
+done
+
+# If any exit code wasn't 0, propagate.
+for i in "${exitcodes[@]}"; do
+  [ "$i" == 0 ] || exit $i
+done
